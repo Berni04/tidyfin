@@ -1,0 +1,7 @@
+{
+    "tmdb_api_key": "",
+    "default_movies_dir": "",
+    "default_shows_dir": "",
+    "default_review_dir": "",
+    "min_confidence_threshold": 0.5
+}
