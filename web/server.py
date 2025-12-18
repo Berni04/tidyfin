@@ -24,7 +24,8 @@ app_state = {
     'tmdb_client': None,
     'config': {},
     'scanned_files': [],
-    'previews': []
+    'previews': [],
+    'files_to_organize': []  # Files filtered from preview step
 }
 
 
@@ -160,12 +161,19 @@ def preview_organization():
     movies_dir = data.get('movies_dir', '')
     shows_dir = data.get('shows_dir', '')
     review_dir = data.get('review_dir', '')
+    selected_indices = data.get('selected_indices', None)  # Optional: list of file indices
     
     if not movies_dir or not shows_dir:
         return jsonify({'error': 'Movies and Shows directories required'}), 400
     
     if not app_state['scanned_files']:
         return jsonify({'error': 'No files scanned. Run scan first.'}), 400
+    
+    # Filter files by selected indices if provided
+    files_to_process = app_state['scanned_files']
+    if selected_indices and len(selected_indices) > 0:
+        files_to_process = [app_state['scanned_files'][i] for i in selected_indices 
+                           if i < len(app_state['scanned_files'])]
     
     try:
         organizer = FileOrganizer(
@@ -176,8 +184,9 @@ def preview_organization():
             dry_run=True
         )
         
-        previews = organizer.preview(app_state['scanned_files'])
+        previews = organizer.preview(files_to_process)
         app_state['previews'] = previews
+        app_state['files_to_organize'] = files_to_process  # Store for execute
         
         # Convert to JSON-serializable format
         results = []
@@ -185,13 +194,17 @@ def preview_organization():
             match_info = None
             if media_file.tmdb_match:
                 match = media_file.tmdb_match
+                poster_url = None
+                if match.poster_path:
+                    poster_url = f"https://image.tmdb.org/t/p/w185{match.poster_path}"
                 match_info = {
                     'title': match.title,
                     'year': match.year,
                     'tmdb_id': match.tmdb_id,
                     'season': match.season_number,
                     'episode': match.episode_number,
-                    'episode_title': match.episode_title
+                    'episode_title': match.episode_title,
+                    'poster_url': poster_url
                 }
             
             results.append({
@@ -236,8 +249,10 @@ def execute_organization():
     if not movies_dir or not shows_dir:
         return jsonify({'error': 'Movies and Shows directories required'}), 400
     
-    if not app_state['scanned_files']:
-        return jsonify({'error': 'No files scanned. Run scan first.'}), 400
+    # Use files from preview step (must run preview first)
+    files_to_organize = app_state.get('files_to_organize', [])
+    if not files_to_organize:
+        return jsonify({'error': 'No files to organize. Run preview first.'}), 400
     
     try:
         organizer = FileOrganizer(
@@ -248,11 +263,12 @@ def execute_organization():
             dry_run=False
         )
         
-        summary = organizer.organize(app_state['scanned_files'])
+        summary = organizer.organize(files_to_organize)
         
-        # Clear scanned files after successful organization
+        # Clear state after successful organization
         app_state['scanned_files'] = []
         app_state['previews'] = []
+        app_state['files_to_organize'] = []
         
         # Convert results
         results = []

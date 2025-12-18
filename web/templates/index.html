@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,24 +7,56 @@
     <meta name="description" content="Automatically organize your media files for Jellyfin">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <div class="app-container">
         <!-- Header -->
         <header class="header">
+            <div class="header-controls">
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+                    <span class="icon" id="theme-icon">🌙</span>
+                </button>
+                <button class="settings-btn" onclick="toggleSettings()">
+                    <span>⚙️</span>
+                    <span>Settings</span>
+                </button>
+            </div>
             <div class="logo">
                 <span class="logo-icon">🎬</span>
                 <h1>TidyFin</h1>
             </div>
             <p class="tagline">Jellyfin Media Organizer</p>
-            <button class="settings-btn" onclick="toggleSettings()">⚙️ Settings</button>
         </header>
+
+        <!-- Dashboard Stats -->
+        <div class="dashboard" id="dashboard">
+            <div class="stat-card">
+                <span class="stat-icon">📁</span>
+                <div class="stat-value" id="stat-total">0</div>
+                <div class="stat-label">Files Found</div>
+            </div>
+            <div class="stat-card success">
+                <span class="stat-icon">🎬</span>
+                <div class="stat-value" id="stat-movies">0</div>
+                <div class="stat-label">Movies</div>
+            </div>
+            <div class="stat-card success">
+                <span class="stat-icon">📺</span>
+                <div class="stat-value" id="stat-shows">0</div>
+                <div class="stat-label">TV Shows</div>
+            </div>
+            <div class="stat-card warning">
+                <span class="stat-icon">❓</span>
+                <div class="stat-value" id="stat-unknown">0</div>
+                <div class="stat-label">Unknown</div>
+            </div>
+        </div>
 
         <!-- Settings Panel (Hidden by default) -->
         <div id="settings-panel" class="settings-panel hidden">
-            <h2>Configuration</h2>
+            <h2>⚙️ Configuration</h2>
             <div class="form-group">
                 <label for="api-key">TMDB API Key</label>
                 <div class="input-group">
@@ -41,7 +73,7 @@
         <!-- Main Content -->
         <main class="main-content">
             <!-- Step 1: Source Directory -->
-            <section class="step-card" id="step-scan">
+            <section class="step-card active" id="step-scan">
                 <div class="step-header">
                     <span class="step-number">1</span>
                     <h2>Select Source Directory</h2>
@@ -51,14 +83,26 @@
                         <label for="source-dir">Source Folder (where your unsorted media is)</label>
                         <div class="input-group">
                             <input type="text" id="source-dir" placeholder="D:\Downloads\Media">
-                            <button onclick="browseFolder('source-dir')">Browse</button>
+                            <button onclick="browseFolder('source-dir')">📂 Browse</button>
                         </div>
                     </div>
                     <button class="btn-primary btn-large" onclick="scanDirectory()">
                         🔍 Scan for Media Files
                     </button>
                 </div>
-                <div id="scan-results" class="results-container hidden"></div>
+                <div id="scan-results" class="results-container hidden">
+                    <!-- Batch Actions Bar -->
+                    <div id="batch-actions" class="batch-actions hidden">
+                        <span class="count"><span id="selected-count">0</span> files selected</span>
+                        <div class="actions">
+                            <button onclick="selectAllFiles()">Select All</button>
+                            <button onclick="deselectAllFiles()">Deselect All</button>
+                        </div>
+                    </div>
+                    
+                    <!-- File List -->
+                    <div id="file-list" class="file-list"></div>
+                </div>
             </section>
 
             <!-- Step 2: Destination Directories -->
@@ -72,21 +116,21 @@
                         <label for="movies-dir">Movies Folder</label>
                         <div class="input-group">
                             <input type="text" id="movies-dir" placeholder="D:\Jellyfin\Movies">
-                            <button onclick="browseFolder('movies-dir')">Browse</button>
+                            <button onclick="browseFolder('movies-dir')">📂 Browse</button>
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="shows-dir">TV Shows Folder</label>
                         <div class="input-group">
                             <input type="text" id="shows-dir" placeholder="D:\Jellyfin\Shows">
-                            <button onclick="browseFolder('shows-dir')">Browse</button>
+                            <button onclick="browseFolder('shows-dir')">📂 Browse</button>
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="review-dir">Manual Review Folder (optional)</label>
                         <div class="input-group">
                             <input type="text" id="review-dir" placeholder="D:\Jellyfin\ManualReview">
-                            <button onclick="browseFolder('review-dir')">Browse</button>
+                            <button onclick="browseFolder('review-dir')">📂 Browse</button>
                         </div>
                     </div>
                     <button class="btn-primary btn-large" onclick="previewOrganization()">
@@ -101,8 +145,17 @@
                     <span class="step-number">3</span>
                     <h2>Review & Execute</h2>
                 </div>
-                <div id="preview-container" class="preview-container"></div>
                 <div id="preview-summary" class="preview-summary hidden"></div>
+                <div id="preview-container" class="preview-container"></div>
+                <div id="progress-section" class="progress-container hidden">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span id="progress-status">Processing...</span>
+                        <span class="percentage" id="progress-percentage">0%</span>
+                    </div>
+                </div>
                 <div class="step-actions">
                     <button class="btn-secondary" onclick="resetPreview()">↩️ Start Over</button>
                     <button class="btn-primary btn-large" id="execute-btn" onclick="executeOrganization()">
@@ -117,6 +170,9 @@
                     <h2>✨ Organization Complete!</h2>
                 </div>
                 <div id="final-results" class="final-results"></div>
+                <div style="margin-top: 2rem;">
+                    <button class="btn-primary" onclick="resetAll()">🔄 Organize More Files</button>
+                </div>
             </section>
         </main>
 
@@ -124,7 +180,7 @@
         <div id="folder-modal" class="modal hidden">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>Select Folder</h3>
+                    <h3>📁 Select Folder</h3>
                     <button class="close-btn" onclick="closeFolderModal()">×</button>
                 </div>
                 <div class="modal-body">
@@ -140,6 +196,9 @@
                 </div>
             </div>
         </div>
+
+        <!-- Toast Container -->
+        <div id="toast-container" class="toast-container"></div>
 
         <!-- Loading Overlay -->
         <div id="loading-overlay" class="loading-overlay hidden">
